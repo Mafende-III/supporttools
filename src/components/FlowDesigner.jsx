@@ -1,0 +1,487 @@
+import React, { useState } from 'react';
+import { Plus, Trash2, Save, Copy, Send, ArrowRight } from 'lucide-react';
+import { useProject } from '../context/ProjectContext';
+import SelectWithOther from './common/SelectWithOther';
+import CollapsibleSection from './common/CollapsibleSection';
+import { createFlow, createFlowStep, createFlowIntegration } from '../utils/dataStructure';
+import { generateDrawioPrompt, generateMarkdownDoc } from '../utils/exporters';
+
+const FlowDesigner = () => {
+  const {
+    currentProject,
+    addFlow,
+    updateFlow,
+    duplicateFlow,
+    saveProject,
+    getAllServices,
+    addActor,
+    addIntegrationType,
+    addService
+  } = useProject();
+
+  const [currentFlow, setCurrentFlow] = useState(createFlow({
+    projectId: currentProject?.id
+  }));
+
+  const [expandedSections, setExpandedSections] = useState({
+    basic: true,
+    steps: true,
+    integrations: false,
+    advanced: false
+  });
+
+  const [outputType, setOutputType] = useState('drawio');
+  const [showOutput, setShowOutput] = useState(false);
+  const [output, setOutput] = useState('');
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const updateFlowField = (field, value) => {
+    setCurrentFlow(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddStep = () => {
+    const newStep = createFlowStep(currentFlow.steps.length + 1);
+    setCurrentFlow(prev => ({
+      ...prev,
+      steps: [...prev.steps, newStep]
+    }));
+  };
+
+  const handleUpdateStep = (stepId, field, value) => {
+    setCurrentFlow(prev => ({
+      ...prev,
+      steps: prev.steps.map(step =>
+        step.id === stepId ? { ...step, [field]: value } : step
+      )
+    }));
+  };
+
+  const handleRemoveStep = (stepId) => {
+    if (currentFlow.steps.length > 1) {
+      setCurrentFlow(prev => ({
+        ...prev,
+        steps: prev.steps.filter(s => s.id !== stepId)
+          .map((step, index) => ({ ...step, stepNumber: index + 1 }))
+      }));
+    }
+  };
+
+  const handleAddIntegration = () => {
+    const newIntegration = createFlowIntegration();
+    setCurrentFlow(prev => ({
+      ...prev,
+      integrations: [...prev.integrations, newIntegration]
+    }));
+  };
+
+  const handleUpdateIntegration = (integrationId, field, value) => {
+    setCurrentFlow(prev => ({
+      ...prev,
+      integrations: prev.integrations.map(int =>
+        int.id === integrationId ? { ...int, [field]: value } : int
+      )
+    }));
+  };
+
+  const handleRemoveIntegration = (integrationId) => {
+    setCurrentFlow(prev => ({
+      ...prev,
+      integrations: prev.integrations.filter(i => i.id !== integrationId)
+    }));
+  };
+
+  const handleSaveFlow = () => {
+    if (!currentFlow.name || !currentFlow.serviceId) {
+      alert('Please provide flow name and select a service');
+      return;
+    }
+
+    addFlow(currentFlow);
+    saveProject();
+    alert('Flow saved successfully!');
+    setCurrentFlow(createFlow({ projectId: currentProject?.id }));
+  };
+
+  const handleGenerateOutput = () => {
+    if (!currentFlow.name || !currentFlow.serviceId) {
+      alert('Please complete flow details before generating');
+      return;
+    }
+
+    const generated = outputType === 'drawio'
+      ? generateDrawioPrompt(currentFlow, currentProject)
+      : generateMarkdownDoc(currentFlow, currentProject);
+
+    setOutput(generated);
+    setShowOutput(true);
+    navigator.clipboard.writeText(generated);
+    alert('Output copied to clipboard!');
+  };
+
+  // Prepare options for SelectWithOther
+  const domainOptions = currentProject?.serviceRegistry.domains.map(d => ({
+    id: d.id,
+    abbreviation: d.name,
+    fullName: d.description,
+    description: `${d.services.length} services`,
+    label: d.name
+  })) || [];
+
+  const serviceOptions = currentFlow.serviceDomainId
+    ? currentProject?.serviceRegistry.domains
+        .find(d => d.id === currentFlow.serviceDomainId)
+        ?.services.map(s => ({
+          id: s.id,
+          abbreviation: s.abbreviation || s.name,
+          fullName: s.name,
+          description: s.description,
+          label: s.name
+        })) || []
+    : [];
+
+  const actorOptions = currentProject?.actorRegistry.actors.map(a => ({
+    id: a.id,
+    abbreviation: a.abbreviation,
+    fullName: a.fullName,
+    description: a.description,
+    label: `${a.abbreviation} - ${a.fullName}`
+  })) || [];
+
+  const integrationTypeOptions = currentProject?.integrationTypes.types.map(t => ({
+    id: t.id,
+    abbreviation: t.abbreviation,
+    fullName: t.name,
+    description: t.description,
+    label: t.name
+  })) || [];
+
+  const allServiceOptions = getAllServices().map(s => ({
+    id: s.id,
+    abbreviation: s.abbreviation || s.name,
+    fullName: s.name,
+    description: `${s.domainName} - ${s.description}`,
+    label: s.name
+  }));
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Flow Designer</h2>
+
+        <div className="flex gap-4">
+          <button
+            onClick={handleSaveFlow}
+            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2"
+          >
+            <Save size={18} />
+            Save Flow
+          </button>
+
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                value="drawio"
+                checked={outputType === 'drawio'}
+                onChange={(e) => setOutputType(e.target.value)}
+              />
+              Draw.io Prompt
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                value="markdown"
+                checked={outputType === 'markdown'}
+                onChange={(e) => setOutputType(e.target.value)}
+              />
+              Markdown Doc
+            </label>
+          </div>
+
+          <button
+            onClick={handleGenerateOutput}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+          >
+            <Send size={18} />
+            Generate
+          </button>
+        </div>
+      </div>
+
+      {/* Output Display */}
+      {showOutput && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold">Generated Output (Copied to Clipboard)</h3>
+            <button
+              onClick={() => setShowOutput(false)}
+              className="px-3 py-1 bg-gray-500 text-white rounded"
+            >
+              Close
+            </button>
+          </div>
+          <pre className="bg-white p-4 rounded border overflow-x-auto text-sm max-h-96">
+            {output}
+          </pre>
+        </div>
+      )}
+
+      {/* Basic Information */}
+      <CollapsibleSection
+        title="Basic Information"
+        isExpanded={expandedSections.basic}
+        onToggle={() => toggleSection('basic')}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Service Domain *</label>
+              <select
+                value={currentFlow.serviceDomainId}
+                onChange={(e) => {
+                  updateFlowField('serviceDomainId', e.target.value);
+                  updateFlowField('serviceId', '');
+                }}
+                className="w-full px-3 py-2 border rounded-md"
+                required
+              >
+                <option value="">Select Domain</option>
+                {domainOptions.map(opt => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Service *</label>
+              <SelectWithOther
+                value={currentFlow.serviceId}
+                onChange={(value) => updateFlowField('serviceId', value)}
+                options={serviceOptions}
+                placeholder="Select Service"
+                onAddNew={(data) => {
+                  if (currentFlow.serviceDomainId) {
+                    const newService = addService(currentFlow.serviceDomainId, data);
+                    updateFlowField('serviceId', newService.id);
+                    saveProject();
+                  }
+                }}
+                disabled={!currentFlow.serviceDomainId}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Flow Name *</label>
+              <input
+                type="text"
+                value={currentFlow.name}
+                onChange={(e) => updateFlowField('name', e.target.value)}
+                placeholder="e.g., PHP Enrollment Process"
+                className="w-full px-3 py-2 border rounded-md"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Priority</label>
+              <select
+                value={currentFlow.priority}
+                onChange={(e) => updateFlowField('priority', e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Description</label>
+            <textarea
+              value={currentFlow.description}
+              onChange={(e) => updateFlowField('description', e.target.value)}
+              placeholder="Describe the overall flow..."
+              rows={3}
+              className="w-full px-3 py-2 border rounded-md"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Entry Point</label>
+              <input
+                type="text"
+                value={currentFlow.entryPoint}
+                onChange={(e) => updateFlowField('entryPoint', e.target.value)}
+                placeholder="e.g., Career Portal - Apply Button"
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Trigger Event</label>
+              <input
+                type="text"
+                value={currentFlow.triggerEvent}
+                onChange={(e) => updateFlowField('triggerEvent', e.target.value)}
+                placeholder="e.g., User clicks Apply"
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* Process Steps */}
+      <CollapsibleSection
+        title="Process Steps"
+        badge={currentFlow.steps.length}
+        isExpanded={expandedSections.steps}
+        onToggle={() => toggleSection('steps')}
+      >
+        <div className="space-y-4">
+          {currentFlow.steps.map(step => (
+            <div key={step.id} className="border rounded-lg p-4 bg-gray-50">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-semibold">Step {step.stepNumber}</h3>
+                <button
+                  onClick={() => handleRemoveStep(step.id)}
+                  className="text-red-500 hover:text-red-700"
+                  disabled={currentFlow.steps.length === 1}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Actor</label>
+                  <SelectWithOther
+                    value={step.actorId}
+                    onChange={(value) => handleUpdateStep(step.id, 'actorId', value)}
+                    options={actorOptions}
+                    placeholder="Select Actor"
+                    onAddNew={(data) => {
+                      const newActor = addActor(data);
+                      handleUpdateStep(step.id, 'actorId', newActor.id);
+                      saveProject();
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Communication Type</label>
+                  <SelectWithOther
+                    value={step.communicationTypeId}
+                    onChange={(value) => handleUpdateStep(step.id, 'communicationTypeId', value)}
+                    options={integrationTypeOptions}
+                    placeholder="Select Type"
+                    onAddNew={(data) => {
+                      const newType = addIntegrationType(data);
+                      handleUpdateStep(step.id, 'communicationTypeId', newType.id);
+                      saveProject();
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Action/Process</label>
+                <textarea
+                  value={step.action}
+                  onChange={(e) => handleUpdateStep(step.id, 'action', e.target.value)}
+                  placeholder="Describe the action..."
+                  rows={2}
+                  className="w-full px-2 py-1 border rounded"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Data Input Description</label>
+                  <input
+                    type="text"
+                    value={step.dataInput.description}
+                    onChange={(e) => handleUpdateStep(step.id, 'dataInput', {
+                      ...step.dataInput,
+                      description: e.target.value
+                    })}
+                    placeholder="Input data..."
+                    className="w-full px-2 py-1 border rounded"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Data Output Description</label>
+                  <input
+                    type="text"
+                    value={step.dataOutput.description}
+                    onChange={(e) => handleUpdateStep(step.id, 'dataOutput', {
+                      ...step.dataOutput,
+                      description: e.target.value
+                    })}
+                    placeholder="Output data..."
+                    className="w-full px-2 py-1 border rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={step.isDecisionPoint}
+                    onChange={(e) => handleUpdateStep(step.id, 'isDecisionPoint', e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium">This is a decision point</span>
+                </label>
+
+                {step.isDecisionPoint && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      value={step.decisionCriteria}
+                      onChange={(e) => handleUpdateStep(step.id, 'decisionCriteria', e.target.value)}
+                      placeholder="Decision criteria..."
+                      className="w-full px-2 py-1 border rounded"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={handleAddStep}
+            className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 text-gray-600 hover:text-blue-500 flex items-center justify-center gap-2"
+          >
+            <Plus size={18} />
+            Add Step
+          </button>
+        </div>
+      </CollapsibleSection>
+
+      {/* Flow Summary */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="font-bold mb-2">Flow Summary</h3>
+        <div className="space-y-1 text-sm">
+          <p><strong>Flow:</strong> {currentFlow.name || 'Not specified'}</p>
+          <p><strong>Steps:</strong> {currentFlow.steps.length}</p>
+          <p><strong>Decision Points:</strong> {currentFlow.steps.filter(s => s.isDecisionPoint).length}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FlowDesigner;

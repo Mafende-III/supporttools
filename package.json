@@ -1,0 +1,36 @@
+{
+  "name": "microservices-flow-designer",
+  "version": "1.0.0",
+  "description": "Generic Microservices Flow Designer - Professional business analysis tool for mapping microservice workflows",
+  "main": "src/App.jsx",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx",
+    "format": "prettier --write \"src/**/*.{js,jsx,json,css,md}\""
+  },
+  "keywords": [
+    "microservices",
+    "workflow",
+    "business-analysis",
+    "flow-designer",
+    "draw.io",
+    "system-design",
+    "documentation"
+  ],
+  "author": "Your Organization",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.263.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.3",
+    "vite": "^4.4.5",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.32.2",
+    "prettier": "^3.0.0"
+  }
+}
