@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:14-alpine
+    container_name: flowdesigner-db
+    environment:
+      POSTGRES_DB: flowdesigner
+      POSTGRES_USER: flowuser
+      POSTGRES_PASSWORD: flowpass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowuser -d flowdesigner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: .
+    container_name: flowdesigner-backend
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_NAME: flowdesigner
+      DB_USER: flowuser
+      DB_PASSWORD: flowpass123
+      JWT_SECRET: change-this-secret-in-production
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src:/app/src
+      - ./migrations:/app/migrations
+    command: sh -c "npm run migrate && npm start"
+
+volumes:
+  postgres_data:

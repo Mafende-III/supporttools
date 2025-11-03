@@ -40,3 +40,15 @@ coverage/
 .tmp/
 temp/
 *.tmp
+
+# Backend specific
+backend/.env
+backend/node_modules/
+
+# Docker
+docker-compose.override.yml
+*.env.docker
+
+# Database
+*.sql.backup
+*.dump
