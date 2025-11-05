@@ -6,6 +6,7 @@
 /**
  * Generate Draw.io Prompt from Flow
  * Creates a detailed prompt for AI to generate draw.io XML
+ * Enhanced to show each step separately, service interactions, and data flow
  */
 export const generateDrawioPrompt = (flow, project) => {
   const getServiceName = (serviceId) => {
@@ -42,8 +43,15 @@ export const generateDrawioPrompt = (flow, project) => {
   output += `📋 Basic Information:\n`;
   output += `• Flow Name: ${flow.name}\n`;
   output += `• Description: ${flow.description}\n`;
-  output += `• Service Domain: ${getServiceDomainName(flow.serviceDomainId)}\n`;
-  output += `• Primary Service: ${getServiceName(flow.serviceId)}\n`;
+  if (flow.serviceDomainId) {
+    output += `• Service Domain: ${getServiceDomainName(flow.serviceDomainId)}\n`;
+  }
+  if (flow.involvedServiceIds && flow.involvedServiceIds.length > 0) {
+    output += `• Involved Services:\n`;
+    flow.involvedServiceIds.forEach(serviceId => {
+      output += `  - ${getServiceName(serviceId)}\n`;
+    });
+  }
   output += `• Priority: ${flow.priority}\n`;
   output += `• Status: ${flow.status}\n`;
   output += `• Version: ${flow.version}\n`;
@@ -121,8 +129,39 @@ export const generateDrawioPrompt = (flow, project) => {
     }
   });
 
-  // Integration Points
-  if (flow.integrations.length > 0) {
+  // Service Interactions (detailed service-to-service communication)
+  if (flow.serviceInteractions && flow.serviceInteractions.length > 0) {
+    output += `\n🔗 Service Interactions (Detailed):\n`;
+    output += `───────────────────────────────────────\n`;
+    flow.serviceInteractions.forEach((interaction) => {
+      output += `\n• ${getServiceName(interaction.fromServiceId)} → ${getServiceName(interaction.toServiceId)}\n`;
+      output += `  Type: ${interaction.interactionType} (${getIntegrationTypeName(interaction.communicationTypeId)})\n`;
+      output += `  Method: ${interaction.method}\n`;
+      if (interaction.endpoint) {
+        output += `  Endpoint: ${interaction.endpoint}\n`;
+      }
+      output += `  Data Format: ${interaction.dataFormat}\n`;
+      output += `  Data Exchanged: ${interaction.dataExchanged}\n`;
+      if (interaction.frequency) {
+        output += `  Frequency: ${interaction.frequency}\n`;
+      }
+      if (interaction.averageLatency) {
+        output += `  Latency: ${interaction.averageLatency}\n`;
+      }
+      if (interaction.authentication) {
+        output += `  Auth: ${interaction.authentication}\n`;
+      }
+      if (interaction.errorHandling) {
+        output += `  Error Handling: ${interaction.errorHandling}\n`;
+      }
+      if (interaction.description) {
+        output += `  Description: ${interaction.description}\n`;
+      }
+    });
+  }
+
+  // Integration Points (simple)
+  if (flow.integrations && flow.integrations.length > 0) {
     output += `\n🔗 Integration Points:\n`;
     output += `───────────────────────────────────────\n`;
     flow.integrations.forEach((integration) => {
@@ -198,53 +237,106 @@ export const generateDrawioPrompt = (flow, project) => {
     output += `   • Swimlane: ${getActorName(actorId)}\n`;
   });
 
-  output += `\n2. PROCESS BOXES:\n`;
-  output += `   • Rectangle shape for each step\n`;
-  output += `   • Include step number and action description\n`;
-  output += `   • Place in appropriate swimlane based on actor\n`;
-  output += `   • Add service name as label below action\n`;
+  output += `\n2. PROCESS BOXES (CRITICAL - EACH STEP SEPARATE):\n`;
+  output += `   ⚠️ IMPORTANT: Create a SEPARATE rectangle shape for EACH step - DO NOT group steps together\n`;
+  output += `   • Rectangle shape for EVERY SINGLE step (${flow.steps.length} total rectangles needed)\n`;
+  output += `   • Each rectangle must include:\n`;
+  output += `     - Step number (e.g., "Step 1")\n`;
+  output += `     - Action description\n`;
+  output += `     - Service names involved (as subtitle or badge)\n`;
+  output += `   • Place each rectangle in the appropriate swimlane based on the actor\n`;
+  output += `   • Use different rectangle colors/shades based on service involved\n`;
+  output += `   • Add small service icon or badge on each rectangle\n\n`;
+  output += `   Steps to create separately:\n`;
+  flow.steps.forEach(step => {
+    output += `   ${step.stepNumber}. "${step.action}" [${getActorName(step.actorId)}]`;
+    if (step.serviceIds.length > 0) {
+      output += ` - Services: ${step.serviceIds.map(sid => getServiceName(sid)).join(', ')}`;
+    }
+    output += `\n`;
+  });
 
-  output += `\n3. DECISION POINTS:\n`;
+  output += `\n3. SERVICE INTERACTIONS:\n`;
+  output += `   • Show service-to-service communication with dedicated connector arrows\n`;
+  output += `   • Use different arrow styles for different interaction types:\n`;
+  output += `     - Synchronous: Solid arrow with filled head\n`;
+  output += `     - Asynchronous: Dashed arrow\n`;
+  output += `     - Event-driven: Wavy or zigzag arrow\n`;
+  output += `   • Label each service interaction arrow with:\n`;
+  output += `     - Method/operation (e.g., "POST /api/users")\n`;
+  output += `     - Data being exchanged\n`;
+  output += `     - Frequency (if applicable)\n`;
+  if (flow.serviceInteractions && flow.serviceInteractions.length > 0) {
+    output += `\n   Service interactions to visualize:\n`;
+    flow.serviceInteractions.forEach(interaction => {
+      output += `   • ${getServiceName(interaction.fromServiceId)} → ${getServiceName(interaction.toServiceId)}: ${interaction.method || 'N/A'} (${interaction.interactionType})\n`;
+    });
+  }
+
+  output += `\n4. DATA FLOW LABELS:\n`;
+  output += `   • Add text labels on EVERY connector arrow showing:\n`;
+  output += `     - What data is being passed (input/output)\n`;
+  output += `     - Data format (JSON, XML, etc.)\n`;
+  output += `     - Any transformations or processing\n`;
+  output += `   • Use small font but ensure readability\n`;
+  output += `   • Position labels along the arrow path\n`;
+
+  output += `\n5. DECISION POINTS:\n`;
   output += `   • Use diamond shape for decision points\n`;
+  output += `   • Show ALL conditional paths coming out of the diamond\n`;
+  output += `   • Label each path with its condition\n`;
   const decisionSteps = flow.steps.filter(s => s.isDecisionPoint);
   if (decisionSteps.length > 0) {
     decisionSteps.forEach(step => {
       output += `   • Step ${step.stepNumber}: ${step.decisionCriteria}\n`;
+      if (step.conditionalPaths && step.conditionalPaths.length > 0) {
+        step.conditionalPaths.forEach(path => {
+          output += `     → Path: ${path.condition}\n`;
+        });
+      }
     });
   } else {
     output += `   • No decision points in this flow\n`;
   }
 
-  output += `\n4. CONNECTORS:\n`;
-  output += `   • Draw arrows between sequential steps\n`;
-  output += `   • Use different line styles based on communication type:\n`;
-  const uniqueCommTypes = [...new Set(flow.steps.map(s => s.communicationTypeId))];
-  uniqueCommTypes.forEach(typeId => {
-    const type = project.integrationTypes.types.find(t => t.id === typeId);
-    if (type) {
-      output += `     - ${type.name}: ${type.style.lineStyle} line, ${type.style.color}\n`;
-    }
-  });
+  output += `\n6. AUTOMATIONS & INTEGRATIONS:\n`;
+  output += `   • Add special icons/badges for:\n`;
+  output += `     - Automated steps (robot icon or "AUTO" badge)\n`;
+  output += `     - Notifications (bell icon)\n`;
+  output += `     - External integrations (cloud icon or "EXT" badge)\n`;
+  output += `     - Database operations (database icon)\n`;
+  output += `     - API calls (API icon)\n`;
 
-  output += `\n5. COLOR CODING:\n`;
+  output += `\n7. COLOR CODING:\n`;
   const domain = project.serviceRegistry.domains.find(d => d.id === flow.serviceDomainId);
   if (domain) {
     output += `   • Use ${domain.color} for ${domain.name} domain elements\n`;
   }
-  output += `   • Use consistent colors for each service\n`;
-  output += `   • Highlight decision points in yellow\n`;
-  output += `   • Use red borders for error handling steps\n`;
+  output += `   • Assign consistent colors to each service:\n`;
+  if (flow.involvedServiceIds && flow.involvedServiceIds.length > 0) {
+    const serviceColors = ['#E3F2FD', '#F3E5F5', '#E8F5E9', '#FFF3E0', '#FCE4EC'];
+    flow.involvedServiceIds.forEach((serviceId, index) => {
+      output += `     - ${getServiceName(serviceId)}: ${serviceColors[index % serviceColors.length]}\n`;
+    });
+  }
+  output += `   • Highlight decision points in yellow (#FFEB3B)\n`;
+  output += `   • Use red borders for error handling steps (#F44336)\n`;
+  output += `   • Use green for successful completion (#4CAF50)\n`;
 
-  output += `\n6. ANNOTATIONS:\n`;
-  output += `   • Add data labels for input/output on arrows\n`;
-  output += `   • Include timing information where available\n`;
-  output += `   • Add notification icons for steps that send notifications\n`;
-
-  output += `\n7. LAYOUT:\n`;
+  output += `\n8. LAYOUT & SPACING:\n`;
   output += `   • Left-to-right flow direction\n`;
-  output += `   • Maintain consistent spacing between elements\n`;
-  output += `   • Align elements in same swimlane\n`;
-  output += `   • Use container groups for related steps\n`;
+  output += `   • Maintain 50-100px spacing between consecutive step rectangles\n`;
+  output += `   • Align elements horizontally within same swimlane\n`;
+  output += `   • Use container groups for related sub-processes\n`;
+  output += `   • Ensure no overlapping elements\n`;
+  output += `   • Add padding within swimlanes (20px top/bottom)\n`;
+
+  output += `\n9. LEGEND:\n`;
+  output += `   • Add a legend box showing:\n`;
+  output += `     - Color meanings (which color = which service)\n`;
+  output += `     - Line style meanings (solid = sync, dashed = async, etc.)\n`;
+  output += `     - Icon meanings (automation, notification, etc.)\n`;
+  output += `     - Shape meanings (rectangle = step, diamond = decision)\n`;
 
   output += `\n═══════════════════════════════════════\n`;
   output += `Generated: ${new Date().toISOString()}\n`;
@@ -386,9 +478,202 @@ export const generateSimplePrompt = (flow, project) => {
   return output;
 };
 
+/**
+ * Generate Service Interaction Matrix
+ * Creates a table showing which services interact with each other
+ */
+export const generateServiceInteractionMatrix = (flow, project) => {
+  const getServiceName = (serviceId) => {
+    for (const domain of project.serviceRegistry.domains) {
+      const service = domain.services.find(s => s.id === serviceId);
+      if (service) return service.name;
+    }
+    return 'Unknown Service';
+  };
+
+  let output = `# Service Interaction Matrix\n`;
+  output += `**Flow:** ${flow.name}\n\n`;
+
+  // Get all involved services
+  const serviceIds = flow.involvedServiceIds || [];
+  if (serviceIds.length === 0) {
+    return output + `No services involved in this flow.\n`;
+  }
+
+  // Create matrix header
+  output += `| From \\ To | ${serviceIds.map(sid => getServiceName(sid)).join(' | ')} |\n`;
+  output += `|${'-'.repeat(15)}|${serviceIds.map(() => '-'.repeat(20)).join('|')}|\n`;
+
+  // Create matrix rows
+  serviceIds.forEach(fromId => {
+    output += `| **${getServiceName(fromId)}** |`;
+
+    serviceIds.forEach(toId => {
+      if (fromId === toId) {
+        output += ' - |';
+      } else {
+        // Find interactions between these services
+        const interactions = (flow.serviceInteractions || []).filter(
+          int => int.fromServiceId === fromId && int.toServiceId === toId
+        );
+
+        if (interactions.length > 0) {
+          const methods = interactions.map(int => int.method || int.interactionType).join(', ');
+          output += ` ${methods} |`;
+        } else {
+          output += ' |';
+        }
+      }
+    });
+    output += `\n`;
+  });
+
+  output += `\n## Detailed Interactions\n\n`;
+
+  if (flow.serviceInteractions && flow.serviceInteractions.length > 0) {
+    flow.serviceInteractions.forEach((interaction, index) => {
+      output += `### ${index + 1}. ${getServiceName(interaction.fromServiceId)} → ${getServiceName(interaction.toServiceId)}\n\n`;
+      output += `| Property | Value |\n`;
+      output += `|----------|-------|\n`;
+      output += `| Interaction Type | ${interaction.interactionType} |\n`;
+      output += `| Method | ${interaction.method || 'N/A'} |\n`;
+      output += `| Endpoint | ${interaction.endpoint || 'N/A'} |\n`;
+      output += `| Data Format | ${interaction.dataFormat} |\n`;
+      output += `| Data Exchanged | ${interaction.dataExchanged} |\n`;
+      output += `| Frequency | ${interaction.frequency || 'N/A'} |\n`;
+      output += `| Latency | ${interaction.averageLatency || 'N/A'} |\n`;
+      output += `| Authentication | ${interaction.authentication || 'N/A'} |\n\n`;
+    });
+  } else {
+    output += `No detailed service interactions documented.\n`;
+  }
+
+  return output;
+};
+
+/**
+ * Generate Mermaid Sequence Diagram
+ */
+export const generateSequenceDiagram = (flow, project) => {
+  const getServiceName = (serviceId) => {
+    for (const domain of project.serviceRegistry.domains) {
+      const service = domain.services.find(s => s.id === serviceId);
+      if (service) return service.abbreviation || service.name;
+    }
+    return 'Unknown';
+  };
+
+  const getActorName = (actorId) => {
+    const actor = project.actorRegistry.actors.find(a => a.id === actorId);
+    return actor ? actor.abbreviation : 'Unknown';
+  };
+
+  let output = `\`\`\`mermaid\nsequenceDiagram\n`;
+  output += `    title ${flow.name}\n\n`;
+
+  // Declare participants
+  const participants = new Set();
+  flow.steps.forEach(step => {
+    participants.add(getActorName(step.actorId));
+    step.serviceIds.forEach(sid => participants.add(getServiceName(sid)));
+  });
+
+  participants.forEach(p => {
+    output += `    participant ${p}\n`;
+  });
+
+  output += `\n`;
+
+  // Add interactions
+  flow.steps.forEach((step, index) => {
+    const actor = getActorName(step.actorId);
+
+    if (step.serviceIds.length > 0) {
+      step.serviceIds.forEach(serviceId => {
+        const service = getServiceName(serviceId);
+        const commType = step.communicationTypeId ? '->>+' : '->>';
+        output += `    ${actor}${commType}${service}: ${step.action}\n`;
+
+        if (step.dataOutput.description) {
+          output += `    ${service}-->>-${actor}: ${step.dataOutput.description}\n`;
+        }
+      });
+    }
+
+    if (step.isDecisionPoint) {
+      output += `    alt ${step.decisionCriteria}\n`;
+      if (step.conditionalPaths && step.conditionalPaths.length > 0) {
+        step.conditionalPaths.forEach((path, idx) => {
+          if (idx === 0) {
+            output += `        Note right of ${actor}: ${path.condition}\n`;
+          } else {
+            output += `    else ${path.condition}\n`;
+          }
+        });
+      }
+      output += `    end\n`;
+    }
+
+    if (step.errorHandling) {
+      output += `    Note over ${actor}: Error Handling: ${step.errorHandling}\n`;
+    }
+  });
+
+  output += `\`\`\`\n`;
+  return output;
+};
+
+/**
+ * Generate Mermaid Architecture Diagram
+ */
+export const generateArchitectureDiagram = (flow, project) => {
+  const getServiceName = (serviceId) => {
+    for (const domain of project.serviceRegistry.domains) {
+      const service = domain.services.find(s => s.id === serviceId);
+      if (service) return { name: service.name, abbr: service.abbreviation };
+    }
+    return { name: 'Unknown', abbr: 'UNK' };
+  };
+
+  let output = `\`\`\`mermaid\ngraph LR\n`;
+  output += `    %% ${flow.name} Architecture\n\n`;
+
+  // Add services as nodes
+  const serviceIds = flow.involvedServiceIds || [];
+  serviceIds.forEach(serviceId => {
+    const service = getServiceName(serviceId);
+    output += `    ${service.abbr}["${service.name}"]\n`;
+  });
+
+  output += `\n`;
+
+  // Add interactions as edges
+  if (flow.serviceInteractions && flow.serviceInteractions.length > 0) {
+    flow.serviceInteractions.forEach(interaction => {
+      const fromService = getServiceName(interaction.fromServiceId);
+      const toService = getServiceName(interaction.toServiceId);
+      const method = interaction.method || interaction.interactionType;
+
+      if (interaction.interactionType === 'synchronous') {
+        output += `    ${fromService.abbr} -->|${method}| ${toService.abbr}\n`;
+      } else if (interaction.interactionType === 'asynchronous') {
+        output += `    ${fromService.abbr} -.->|${method}| ${toService.abbr}\n`;
+      } else {
+        output += `    ${fromService.abbr} ==>|${method}| ${toService.abbr}\n`;
+      }
+    });
+  }
+
+  output += `\`\`\`\n`;
+  return output;
+};
+
 export default {
   generateDrawioPrompt,
   generateMarkdownDoc,
   generateJSONExport,
-  generateSimplePrompt
+  generateSimplePrompt,
+  generateServiceInteractionMatrix,
+  generateSequenceDiagram,
+  generateArchitectureDiagram
 };
