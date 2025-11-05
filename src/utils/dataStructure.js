@@ -149,6 +149,27 @@ export const createFlowIntegration = (data = {}) => ({
   ...data
 });
 
+export const createServiceInteraction = (data = {}) => ({
+  id: generateId('service-interaction'),
+  fromServiceId: data.fromServiceId || '',
+  toServiceId: data.toServiceId || '',
+  interactionType: data.interactionType || 'synchronous', // synchronous | asynchronous | event-driven
+  communicationTypeId: data.communicationTypeId || '',
+  method: data.method || '', // GET, POST, PUT, DELETE, PUBLISH, SUBSCRIBE, etc.
+  endpoint: data.endpoint || '', // API endpoint or event topic
+  dataExchanged: data.dataExchanged || '',
+  dataFormat: data.dataFormat || 'JSON', // JSON | XML | Protocol Buffers | etc.
+  frequency: data.frequency || '',
+  averageLatency: data.averageLatency || '',
+  authentication: data.authentication || '',
+  errorHandling: data.errorHandling || '',
+  retry: data.retry || '',
+  timeout: data.timeout || '',
+  description: data.description || '',
+  customFields: data.customFields || {},
+  ...data
+});
+
 export const createBusinessRule = (data = {}) => ({
   id: generateId('rule'),
   name: data.name || '',
@@ -172,8 +193,11 @@ export const createFlow = (data = {}) => ({
   // Basic Information
   name: data.name || '',
   description: data.description || '',
-  serviceDomainId: data.serviceDomainId || '',
-  serviceId: data.serviceId || '',
+
+  // Cross-cutting Services (removed single serviceId)
+  involvedServiceIds: data.involvedServiceIds || [], // Multi-select: all services this flow touches
+  serviceDomainId: data.serviceDomainId || '', // Optional: primary domain if applicable
+
   priority: data.priority || 'Medium', // Low | Medium | High | Critical
   status: data.status || 'draft', // draft | review | approved | deprecated
   version: data.version || '1.0',
@@ -187,8 +211,11 @@ export const createFlow = (data = {}) => ({
   // Process Steps
   steps: data.steps || [createFlowStep(1)],
 
-  // Integration Points
+  // Integration Points (simple)
   integrations: data.integrations || [],
+
+  // Service Interactions (detailed service-to-service tracking)
+  serviceInteractions: data.serviceInteractions || [],
 
   // Business Rules
   businessRules: data.businessRules || [],
@@ -201,6 +228,16 @@ export const createFlow = (data = {}) => ({
     responseTime: data.performanceRequirements?.responseTime || '',
     throughput: data.performanceRequirements?.throughput || '',
     availability: data.performanceRequirements?.availability || ''
+  },
+
+  // AI-Assisted Fields
+  naturalLanguageDescription: data.naturalLanguageDescription || '', // User's natural language flow description
+  aiSuggestions: {
+    suggestedServices: data.aiSuggestions?.suggestedServices || [],
+    suggestedActors: data.aiSuggestions?.suggestedActors || [],
+    suggestedIntegrations: data.aiSuggestions?.suggestedIntegrations || [],
+    gaps: data.aiSuggestions?.gaps || [],
+    lastAnalyzedAt: data.aiSuggestions?.lastAnalyzedAt || null
   },
 
   // Audit
@@ -216,6 +253,126 @@ export const createFlow = (data = {}) => ({
 });
 
 // ============================================================================
+// KNOWLEDGE BASE STRUCTURES
+// ============================================================================
+
+export const createKBService = (data = {}) => ({
+  id: generateId('kb-service'),
+  name: data.name || '',
+  abbreviation: data.abbreviation || '',
+  description: data.description || '',
+  type: data.type || 'service', // service | functionality | component
+
+  // Capabilities
+  capabilities: data.capabilities || [], // Array of strings
+  responsibilities: data.responsibilities || '',
+
+  // Technical Details
+  apiEndpoints: data.apiEndpoints || [], // Array of { method, path, description }
+  dataEntities: data.dataEntities || [], // Array of { name, description, fields }
+  events: data.events || [], // Array of { name, type, description }
+
+  // Relationships
+  dependencies: data.dependencies || [], // Array of service IDs
+  consumers: data.consumers || [], // Array of service IDs that consume this service
+
+  // Context & Keywords
+  keywords: data.keywords || [], // Array of strings for AI matching
+  useCases: data.useCases || [], // Array of common use case descriptions
+  userTypes: data.userTypes || [], // Array of user types that interact with this
+  healthProfessionalStages: data.healthProfessionalStages || [], // e.g., ["Student", "Licensed", "Practicing"]
+  ministryFunctions: data.ministryFunctions || [], // Ministry workflows this supports
+
+  // Learning & AI
+  source: data.source || 'manual', // manual | ai-extracted | inferred-from-flow
+  confidence: data.confidence || 1.0, // 0.0 to 1.0 for AI-extracted items
+  lastUpdated: new Date().toISOString(),
+  updatedBy: data.updatedBy || 'system',
+
+  customFields: data.customFields || {},
+  ...data
+});
+
+export const createKBUser = (data = {}) => ({
+  id: generateId('kb-user'),
+  name: data.name || '',
+  abbreviation: data.abbreviation || '',
+  type: data.type || 'human', // human | system | external
+  role: data.role || '',
+  description: data.description || '',
+
+  // Health Context
+  healthProfessionalStage: data.healthProfessionalStage || '', // Student | Licensed | Practicing | Retired
+  department: data.department || '',
+  permissions: data.permissions || [],
+
+  // Workflows
+  commonWorkflows: data.commonWorkflows || [], // Flow IDs this user commonly performs
+  servicesAccessed: data.servicesAccessed || [], // Service IDs this user interacts with
+
+  keywords: data.keywords || [],
+  lastUpdated: new Date().toISOString(),
+  customFields: data.customFields || {},
+  ...data
+});
+
+export const createKBWorkflow = (data = {}) => ({
+  id: generateId('kb-workflow'),
+  name: data.name || '',
+  description: data.description || '',
+  category: data.category || '', // e.g., "Registration", "Certification", "Deployment"
+
+  // Pattern
+  pattern: data.pattern || '', // Common workflow pattern description
+  involvedServices: data.involvedServices || [], // Service IDs
+  involvedUsers: data.involvedUsers || [], // User type IDs
+  typicalSteps: data.typicalSteps || [], // Array of step descriptions
+
+  // Metrics
+  frequency: data.frequency || '',
+  averageDuration: data.averageDuration || '',
+  criticalityLevel: data.criticalityLevel || 'Medium',
+
+  keywords: data.keywords || [],
+  examples: data.examples || [], // Flow IDs that implement this workflow
+  lastUpdated: new Date().toISOString(),
+  customFields: data.customFields || {},
+  ...data
+});
+
+export const createKBDocument = (data = {}) => ({
+  id: generateId('kb-doc'),
+  title: data.title || '',
+  content: data.content || '',
+  type: data.type || 'documentation', // documentation | code | specification | requirement
+  source: data.source || 'manual',
+
+  // Extracted Information (populated by AI)
+  extractedServices: data.extractedServices || [],
+  extractedEndpoints: data.extractedEndpoints || [],
+  extractedEntities: data.extractedEntities || [],
+  extractedWorkflows: data.extractedWorkflows || [],
+
+  processingStatus: data.processingStatus || 'pending', // pending | processing | completed | error
+  processedAt: data.processedAt || null,
+
+  uploadedAt: new Date().toISOString(),
+  uploadedBy: data.uploadedBy || 'system',
+  customFields: data.customFields || {},
+  ...data
+});
+
+export const createKnowledgeBase = () => ({
+  services: [], // Array of createKBService
+  users: [], // Array of createKBUser
+  workflows: [], // Array of createKBWorkflow
+  documents: [], // Array of createKBDocument
+  metrics: [], // Array of system metrics and KPIs
+  version: '1.0',
+  lastUpdated: new Date().toISOString()
+});
+
+// ============================================================================
 // PROJECT STRUCTURE
 // ============================================================================
 
@@ -224,6 +381,23 @@ export const createProjectSettings = (data = {}) => ({
   defaultPriority: data.defaultPriority || 'Medium',
   exportFormat: data.exportFormat || 'drawio',
   autoSave: data.autoSave !== undefined ? data.autoSave : true,
+
+  // AI Configuration
+  aiConfig: {
+    claudeApiKey: data.aiConfig?.claudeApiKey || '',
+    model: data.aiConfig?.model || 'claude-3-5-sonnet-20241022',
+    temperature: data.aiConfig?.temperature || 0.7,
+    maxTokens: data.aiConfig?.maxTokens || 4096,
+    enabled: data.aiConfig?.enabled || false,
+    features: {
+      naturalLanguageProcessing: data.aiConfig?.features?.naturalLanguageProcessing !== false,
+      serviceSuggestion: data.aiConfig?.features?.serviceSuggestion !== false,
+      flowValidation: data.aiConfig?.features?.flowValidation !== false,
+      knowledgeExtraction: data.aiConfig?.features?.knowledgeExtraction !== false,
+      outputEnhancement: data.aiConfig?.features?.outputEnhancement !== false
+    }
+  },
+
   customFields: data.customFields || {},
   ...data
 });
@@ -240,6 +414,9 @@ export const createProject = (data = {}) => ({
   serviceRegistry: data.serviceRegistry || createServiceRegistry(),
   actorRegistry: data.actorRegistry || createActorRegistry(),
   integrationTypes: data.integrationTypes || createIntegrationTypeRegistry(),
+
+  // Knowledge Base
+  knowledgeBase: data.knowledgeBase || createKnowledgeBase(),
 
   // Workflows
   flows: data.flows || [],

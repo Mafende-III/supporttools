@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Save, Send, Download, Upload, FileText, Eye, EyeOff, ArrowRight, Copy } from 'lucide-react';
+import { Plus, Trash2, Save, Send, Download, Upload, FileText, Eye, EyeOff, ArrowRight, Copy, Brain, Sparkles, GitBranch, AlertTriangle, Lightbulb, Database, Users, X } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
 import SelectWithOther from './common/SelectWithOther';
 import CollapsibleSection from './common/CollapsibleSection';
-import { createFlow, createFlowStep, createFlowIntegration } from '../utils/dataStructure';
+import FlowPreview from './FlowPreview';
+import { createFlow, createFlowStep, createFlowIntegration, createServiceInteraction } from '../utils/dataStructure';
 import { generateDrawioPrompt, generateMarkdownDoc } from '../utils/exporters';
+import { processNaturalLanguageFlow, validateFlow } from '../utils/ai';
 
 const FlowDesigner = () => {
   const {
@@ -34,6 +36,10 @@ const FlowDesigner = () => {
   const [showOutput, setShowOutput] = useState(false);
   const [output, setOutput] = useState('');
   const [showSavedFlows, setShowSavedFlows] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [processingAI, setProcessingAI] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -95,8 +101,13 @@ const FlowDesigner = () => {
   };
 
   const handleSaveFlow = () => {
-    if (!currentFlow.name || !currentFlow.serviceId) {
-      alert('Please provide flow name and select a service');
+    if (!currentFlow.name) {
+      alert('Please provide a flow name');
+      return;
+    }
+
+    if (currentFlow.steps.length === 0) {
+      alert('Please add at least one step to the flow');
       return;
     }
 
@@ -104,6 +115,84 @@ const FlowDesigner = () => {
     saveProject();
     alert('Flow saved successfully!');
     setCurrentFlow(createFlow({ projectId: currentProject?.id }));
+    setShowPreview(false);
+  };
+
+  const handlePreview = () => {
+    if (!currentFlow.name) {
+      alert('Please provide a flow name before previewing');
+      return;
+    }
+    setShowPreview(true);
+  };
+
+  const handleProcessWithAI = async () => {
+    if (!currentFlow.naturalLanguageDescription) {
+      alert('Please enter a flow description in natural language');
+      return;
+    }
+
+    if (!currentProject.settings?.aiConfig?.enabled) {
+      alert('AI features are not enabled. Please configure AI settings first.');
+      return;
+    }
+
+    setProcessingAI(true);
+    setAiSuggestions(null);
+
+    try {
+      const result = await processNaturalLanguageFlow(
+        currentFlow.naturalLanguageDescription,
+        currentProject,
+        currentProject.settings.aiConfig
+      );
+
+      if (result.success) {
+        setAiSuggestions(result.analysis);
+        setShowAISuggestions(true);
+
+        // Ask user if they want to apply suggestions
+        if (confirm('AI has analyzed your flow description. Would you like to apply the suggestions?')) {
+          applyAISuggestions(result.analysis);
+        }
+      } else {
+        alert(`AI processing failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('AI processing error:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setProcessingAI(false);
+    }
+  };
+
+  const applyAISuggestions = (analysis) => {
+    // Apply suggested metadata
+    if (analysis.flowMetadata) {
+      setCurrentFlow(prev => ({
+        ...prev,
+        name: analysis.flowMetadata.name || prev.name,
+        description: analysis.flowMetadata.description || prev.description,
+        entryPoint: analysis.flowMetadata.entryPoint || prev.entryPoint,
+        triggerEvent: analysis.flowMetadata.triggerEvent || prev.triggerEvent,
+        priority: analysis.flowMetadata.priority || prev.priority,
+        tags: analysis.flowMetadata.tags || prev.tags
+      }));
+    }
+
+    // Store AI suggestions for later review
+    setCurrentFlow(prev => ({
+      ...prev,
+      aiSuggestions: {
+        suggestedServices: analysis.involvedServices || [],
+        suggestedActors: analysis.involvedActors || [],
+        suggestedIntegrations: analysis.serviceInteractions || [],
+        gaps: analysis.validation?.gaps || [],
+        lastAnalyzedAt: new Date().toISOString()
+      }
+    }));
+
+    alert('AI suggestions have been applied! Review the AI Suggestions panel for details.');
   };
 
   const handleLoadFlow = (flow) => {
@@ -202,6 +291,14 @@ const FlowDesigner = () => {
           >
             <FileText size={18} />
             Saved Flows ({currentProject?.flows?.length || 0})
+          </button>
+
+          <button
+            onClick={handlePreview}
+            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2 transition-all"
+          >
+            <Eye size={18} />
+            Preview Flow
           </button>
 
           <button
@@ -324,43 +421,45 @@ const FlowDesigner = () => {
         onToggle={() => toggleSection('basic')}
       >
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Service Domain *</label>
-              <select
-                value={currentFlow.serviceDomainId}
-                onChange={(e) => {
-                  updateFlowField('serviceDomainId', e.target.value);
-                  updateFlowField('serviceId', '');
-                }}
-                className="w-full px-3 py-2 border rounded-md"
-                required
-              >
-                <option value="">Select Domain</option>
-                {domainOptions.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Involved Services (Multi-select)
+              <span className="text-xs text-gray-500 ml-2">Select all services this cross-cutting flow touches</span>
+            </label>
+            <select
+              multiple
+              value={currentFlow.involvedServiceIds || []}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                updateFlowField('involvedServiceIds', selected);
+              }}
+              className="w-full px-3 py-2 border rounded-md min-h-[120px]"
+              size="6"
+            >
+              {getAllServices().map(service => (
+                <option key={service.id} value={service.id}>
+                  {service.domainName} → {service.name} ({service.abbreviation})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-600 mt-1">
+              Hold Ctrl/Cmd to select multiple services. Selected: {(currentFlow.involvedServiceIds || []).length}
+            </p>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Service *</label>
-              <SelectWithOther
-                value={currentFlow.serviceId}
-                onChange={(value) => updateFlowField('serviceId', value)}
-                options={serviceOptions}
-                placeholder="Select Service"
-                onAddNew={(data) => {
-                  if (currentFlow.serviceDomainId) {
-                    const newService = addService(currentFlow.serviceDomainId, data);
-                    updateFlowField('serviceId', newService.id);
-                    saveProject();
-                  }
-                }}
-                disabled={!currentFlow.serviceDomainId}
-                required
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Service Domain (Optional)</label>
+            <select
+              value={currentFlow.serviceDomainId || ''}
+              onChange={(e) => updateFlowField('serviceDomainId', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md"
+            >
+              <option value="">None (Cross-domain flow)</option>
+              {domainOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>{opt.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-600 mt-1">Select if this flow primarily belongs to one domain</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -401,6 +500,47 @@ const FlowDesigner = () => {
               className="w-full px-3 py-2 border rounded-md"
             />
           </div>
+
+          {/* AI-Powered Natural Language Section */}
+          {currentProject.settings?.aiConfig?.enabled && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Brain className="w-5 h-5 text-purple-600" />
+                <h4 className="font-bold text-purple-900">AI-Assisted Flow Design</h4>
+                <Sparkles className="w-4 h-4 text-yellow-500" />
+              </div>
+              <label className="block text-sm font-medium mb-2 text-purple-800">
+                Describe your flow in natural language:
+              </label>
+              <textarea
+                value={currentFlow.naturalLanguageDescription || ''}
+                onChange={(e) => updateFlowField('naturalLanguageDescription', e.target.value)}
+                placeholder="Example: When a health professional applies for registration, they submit their credentials through the portal. The system validates the information, sends it to the council for review, and notifies the applicant once approved..."
+                rows={5}
+                className="w-full px-3 py-2 border border-purple-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+              <button
+                onClick={handleProcessWithAI}
+                disabled={processingAI || !currentFlow.naturalLanguageDescription}
+                className="mt-3 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
+              >
+                {processingAI ? (
+                  <>
+                    <Brain className="w-4 h-4 animate-pulse" />
+                    Processing with AI...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Process with AI
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-purple-700 mt-2">
+                AI will analyze your description and suggest services, actors, steps, and integrations.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -755,6 +895,122 @@ const FlowDesigner = () => {
           </div>
         )}
       </div>
+
+      {/* AI Suggestions Panel */}
+      {showAISuggestions && aiSuggestions && (
+        <div className="fixed bottom-4 right-4 w-96 max-h-[600px] bg-white rounded-lg shadow-2xl border-2 border-purple-300 overflow-hidden z-40">
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              <h3 className="font-bold">AI Suggestions</h3>
+            </div>
+            <button
+              onClick={() => setShowAISuggestions(false)}
+              className="hover:bg-white hover:bg-opacity-20 rounded p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-4 overflow-y-auto max-h-[500px]">
+            {/* Suggested Services */}
+            {aiSuggestions.involvedServices && aiSuggestions.involvedServices.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
+                  <Database className="w-4 h-4 text-purple-600" />
+                  Suggested Services
+                </h4>
+                <div className="space-y-1">
+                  {aiSuggestions.involvedServices.map((svc, idx) => (
+                    <div key={idx} className="text-sm p-2 bg-purple-50 rounded">
+                      <p className="font-medium">{svc.name}</p>
+                      {svc.reason && <p className="text-xs text-gray-600">{svc.reason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suggested Actors */}
+            {aiSuggestions.involvedActors && aiSuggestions.involvedActors.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-green-600" />
+                  Suggested Actors
+                </h4>
+                <div className="space-y-1">
+                  {aiSuggestions.involvedActors.map((actor, idx) => (
+                    <div key={idx} className="text-sm p-2 bg-green-50 rounded">
+                      <p className="font-medium">{actor.name} ({actor.abbreviation})</p>
+                      {actor.role && <p className="text-xs text-gray-600">Role: {actor.role}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Service Interactions */}
+            {aiSuggestions.serviceInteractions && aiSuggestions.serviceInteractions.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-orange-600" />
+                  Suggested Integrations
+                </h4>
+                <div className="space-y-1">
+                  {aiSuggestions.serviceInteractions.map((int, idx) => (
+                    <div key={idx} className="text-sm p-2 bg-orange-50 rounded">
+                      <p className="font-medium">{int.fromService} → {int.toService}</p>
+                      <p className="text-xs text-gray-600">{int.method} ({int.interactionType})</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Validation Gaps */}
+            {aiSuggestions.validation && aiSuggestions.validation.gaps && aiSuggestions.validation.gaps.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-bold text-sm mb-2 flex items-center gap-2 text-yellow-700">
+                  <AlertTriangle className="w-4 h-4" />
+                  Identified Gaps
+                </h4>
+                <ul className="space-y-1">
+                  {aiSuggestions.validation.gaps.map((gap, idx) => (
+                    <li key={idx} className="text-sm text-yellow-800 bg-yellow-50 p-2 rounded">
+                      • {typeof gap === 'string' ? gap : gap.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Suggestions */}
+            {aiSuggestions.validation && aiSuggestions.validation.suggestions && aiSuggestions.validation.suggestions.length > 0 && (
+              <div className="mb-4">
+                <h4 className="font-bold text-sm mb-2 flex items-center gap-2 text-blue-700">
+                  <Lightbulb className="w-4 h-4" />
+                  Recommendations
+                </h4>
+                <ul className="space-y-1">
+                  {aiSuggestions.validation.suggestions.map((sug, idx) => (
+                    <li key={idx} className="text-sm text-blue-800 bg-blue-50 p-2 rounded">
+                      • {typeof sug === 'string' ? sug : sug.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Flow Preview Modal */}
+      {showPreview && (
+        <FlowPreview
+          flow={currentFlow}
+          onClose={() => setShowPreview(false)}
+          onSave={handleSaveFlow}
+        />
+      )}
     </div>
   );
 };

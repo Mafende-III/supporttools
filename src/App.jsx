@@ -3,14 +3,17 @@ import { ProjectProvider, useProject } from './context/ProjectContext';
 import ServiceRegistry from './components/ServiceRegistry';
 import ActorRegistry from './components/ActorRegistry';
 import FlowDesigner from './components/FlowDesigner';
+import KnowledgeBasePortal from './components/KnowledgeBasePortal';
+import AISettings from './components/AISettings';
 import {
-  Layers, Users, Workflow, Settings, FileText, Download, Upload, Save
+  Layers, Users, Workflow, Settings, FileText, Download, Upload, Save, Book, Brain
 } from 'lucide-react';
 import { exportProjectToJSON, importProjectFromJSON } from './utils/storage';
 
 const AppContent = () => {
   const { currentProject, saveProject } = useProject();
   const [activeTab, setActiveTab] = useState('flows');
+  const [showAISettings, setShowAISettings] = useState(false);
 
   const handleExportProject = () => {
     const json = exportProjectToJSON(currentProject);
@@ -39,6 +42,7 @@ const AppContent = () => {
 
   const tabs = [
     { id: 'flows', label: 'Flow Designer', icon: Workflow },
+    { id: 'knowledge', label: 'Knowledge Base', icon: Book },
     { id: 'services', label: 'Service Registry', icon: Layers },
     { id: 'actors', label: 'Actor Registry', icon: Users },
   ];
@@ -57,6 +61,18 @@ const AppContent = () => {
             </div>
 
             <div className="flex gap-2">
+              <button
+                onClick={() => setShowAISettings(true)}
+                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2 font-semibold transition-all"
+                title="Configure AI Settings"
+              >
+                <Brain size={18} />
+                AI Settings
+                {currentProject?.settings?.aiConfig?.enabled && (
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                )}
+              </button>
+
               <button
                 onClick={() => saveProject()}
                 className="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 flex items-center gap-2 font-semibold"
@@ -116,9 +132,15 @@ const AppContent = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'flows' && <FlowDesigner />}
+        {activeTab === 'knowledge' && <KnowledgeBasePortal />}
         {activeTab === 'services' && <ServiceRegistry />}
         {activeTab === 'actors' && <ActorRegistry />}
       </main>
+
+      {/* AI Settings Modal */}
+      {showAISettings && (
+        <AISettings onClose={() => setShowAISettings(false)} />
+      )}
 
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
@@ -135,7 +157,13 @@ const AppContent = () => {
               <p className="text-xs mt-1">
                 {currentProject?.serviceRegistry.domains.reduce((acc, d) => acc + d.services.length, 0)} services •{' '}
                 {currentProject?.actorRegistry.actors.length} actors •{' '}
-                {currentProject?.flows.length} flows
+                {currentProject?.flows.length} flows •{' '}
+                {currentProject?.knowledgeBase?.services?.length || 0} KB entries
+                {currentProject?.settings?.aiConfig?.enabled && (
+                  <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">
+                    AI Enabled
+                  </span>
+                )}
               </p>
             </div>
           </div>

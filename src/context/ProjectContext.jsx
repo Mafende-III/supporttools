@@ -338,6 +338,167 @@ export const ProjectProvider = ({ children }) => {
     return duplicatedFlow;
   };
 
+  // ========== KNOWLEDGE BASE METHODS ==========
+
+  // Update entire knowledge base
+  const updateProjectKB = (knowledgeBase) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...knowledgeBase,
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Add KB service
+  const addKBService = (serviceData) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        services: [...(prev.knowledgeBase?.services || []), serviceData],
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Update KB service
+  const updateKBService = (serviceId, updates) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        services: (prev.knowledgeBase?.services || []).map(s =>
+          s.id === serviceId ? { ...s, ...updates, lastUpdated: new Date().toISOString() } : s
+        ),
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Delete KB service
+  const deleteKBService = (serviceId) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        services: (prev.knowledgeBase?.services || []).filter(s => s.id !== serviceId),
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Add KB user
+  const addKBUser = (userData) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        users: [...(prev.knowledgeBase?.users || []), userData],
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Add KB workflow
+  const addKBWorkflow = (workflowData) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        workflows: [...(prev.knowledgeBase?.workflows || []), workflowData],
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Add KB document
+  const addKBDocument = (documentData) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      knowledgeBase: {
+        ...prev.knowledgeBase,
+        documents: [...(prev.knowledgeBase?.documents || []), documentData],
+        lastUpdated: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Update project settings (including AI config)
+  const updateSettings = (settings) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        ...settings
+      },
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // ========== SERVICE INTERACTION METHODS ==========
+
+  // Add service interaction to flow
+  const addServiceInteraction = (flowId, interactionData) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      flows: prev.flows.map(flow =>
+        flow.id === flowId
+          ? {
+              ...flow,
+              serviceInteractions: [...(flow.serviceInteractions || []), interactionData],
+              updatedAt: new Date().toISOString()
+            }
+          : flow
+      ),
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Update service interaction in flow
+  const updateServiceInteraction = (flowId, interactionId, updates) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      flows: prev.flows.map(flow =>
+        flow.id === flowId
+          ? {
+              ...flow,
+              serviceInteractions: (flow.serviceInteractions || []).map(int =>
+                int.id === interactionId ? { ...int, ...updates } : int
+              ),
+              updatedAt: new Date().toISOString()
+            }
+          : flow
+      ),
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
+  // Delete service interaction from flow
+  const deleteServiceInteraction = (flowId, interactionId) => {
+    setCurrentProject(prev => ({
+      ...prev,
+      flows: prev.flows.map(flow =>
+        flow.id === flowId
+          ? {
+              ...flow,
+              serviceInteractions: (flow.serviceInteractions || []).filter(int => int.id !== interactionId),
+              updatedAt: new Date().toISOString()
+            }
+          : flow
+      ),
+      updatedAt: new Date().toISOString()
+    }));
+  };
+
   // ========== HELPER METHODS ==========
 
   // Get all services as flat list
@@ -416,6 +577,21 @@ export const ProjectProvider = ({ children }) => {
     updateFlow,
     deleteFlow,
     duplicateFlow,
+
+    // Knowledge Base methods
+    updateProjectKB,
+    addKBService,
+    updateKBService,
+    deleteKBService,
+    addKBUser,
+    addKBWorkflow,
+    addKBDocument,
+    updateSettings,
+
+    // Service Interaction methods
+    addServiceInteraction,
+    updateServiceInteraction,
+    deleteServiceInteraction,
 
     // Helper methods
     getAllServices,
